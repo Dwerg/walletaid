@@ -1,0 +1,2 @@
+python walletaid.py
+@pause
