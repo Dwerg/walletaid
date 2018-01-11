@@ -103,7 +103,7 @@ def hashtowif(b):
     key = presha + h[0:4]
     return b58encode(key)
 
-def pubkey(c)
+def address(c)
     pubkey = str(g * c)
     if pubkey[63] == " ":
         pubkey = "0" + pubkey
