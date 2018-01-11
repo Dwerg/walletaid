@@ -8,7 +8,6 @@ pubprefix = config.get("settings", "pubkeyprefix")
 privprefix = config.get("settings", "privkeyprefix")
 compressed = config.getboolean("settings", "compressed")
 if not compressed:
-    pref = "04"
     suff = ""
 else:
     suff = "01"
@@ -104,6 +103,23 @@ def hashtowif(b):
     key = presha + h[0:4]
     return b58encode(key)
 
+def pubkey(c)
+    pubkey = str(g * c)
+    if pubkey[63] == " ":
+        pubkey = "0" + pubkey
+    if compressed:
+        if int(pubkey[-1], base=16) % 2 == 0:
+            pref = "02"
+        else:
+            pref = "03"
+        pubkey = pubkey[0:64]
+    else:
+        pref = "04"
+        if len(pubkey) < 129:
+            pubkey = pubkey[:64] + "0" + pubkey[64:]
+        pubkey = pubkey.replace(" ", "")
+    return hashtoaddr(pref + pubkey)
+
 header = binascii.unhexlify("f70001d63081d30201010420")
 keyl = 32
 slist = open("foundkeys.txt","w")
@@ -121,20 +137,8 @@ with open('wallet.dat', 'rb') as f:
         while body is not None:
             print "\rScanned {:0.2f} %  ".format(float(header_index) / len(data) * 100),
             if privkey not in klist:
-                if pubkey[63] == " ":
-                    pubkey = "0" + pubkey
-                if compressed:
-                    if int(pubkey[-1], base=16) % 2 == 0:
-                        pref = "02"
-                    else:
-                        pref = "03"
-                    pubkey = pubkey[0:64]
-                else:
-                    if len(pubkey) < 129:
-                        pubkey = pubkey[:64] + "0" + pubkey[64:]
-                    pubkey = pubkey.replace(" ", "")
                 count += 1
-                slist.write("Address: {}\nPrivate key: {}\n\n".format(hashtoaddr(pref + pubkey), hashtowif(body)))
+                slist.write("Address: {}\nPrivate key: {}\n\n".format(address(privkey), hashtowif(body)))
                 klist.append(privkey)
                 
             header_index = data.find(header,\
@@ -142,7 +146,6 @@ with open('wallet.dat', 'rb') as f:
             if header_index >= 0:
                 body = data[header_index + len(header): header_index + len(header) + keyl]
                 privkey = int(binascii.hexlify(body), base = 16)
-                pubkey = str(g * privkey)
             else:
                 body = None
 print "\rScanned 100 %  "
