@@ -1,19 +1,22 @@
+"""
+Walletaid created by Dwerg using Python 2.7
+
+Code for converting to addresses and WIF
+borrowed from pywallet.
+"""
+
 import hashlib
 import binascii
 from ConfigParser import SafeConfigParser
 
+#Opens config.ini and gets settings
 config = SafeConfigParser()
 config.read("config.ini")
 pubprefix = config.get("settings", "pubkeyprefix")
 privprefix = config.get("settings", "privkeyprefix")
 compressed = config.getboolean("settings", "compressed")
-if not compressed:
-    pref = "04"
-    suff = ""
-else:
-    suff = "01"
 
-
+#Calculates public key from a private key
 class Point(object):
     def __init__(self, _x, _y, _order = None): self.x, self.y, self.order = _x, _y, _order
 
@@ -59,7 +62,9 @@ def inverse_mod(a):
 p, INFINITY = 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEFFFFFC2FL, Point(None, None) # secp256k1
 g = Point(0x79BE667EF9DCBBAC55A06295CE870B07029BFCDB2DCE28D959F2815B16F81798L, 0x483ada7726a3c4655da4fbfc0e1108a8fd17b448a68554199c47d08ffb10d4b8L,
           0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141L)
+#End of code used to calculate public key
 
+#Base58 encoder
 __b58chars = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz'
 __b58base = len(__b58chars)
 
@@ -78,8 +83,6 @@ def b58encode(v):
         long_value = div
     result = __b58chars[long_value] + result
 
-    # Bitcoin does a little leading-zero-compression:
-    # leading 0-bytes in the input become leading-1s
     nPad = 0
     for c in v:
         if c == '\0': nPad += 1
@@ -87,9 +90,11 @@ def b58encode(v):
 
     return (__b58chars[0]*nPad) + result
 
+#SHA-256 hashception function
 def Hash(data):
     return hashlib.sha256(hashlib.sha256(data).digest()).digest()
-    
+
+#Takes hexadecimal public key, spits out address 
 def hashtoaddr(a):
     md = hashlib.new('ripemd160')
     md.update(hashlib.sha256(binascii.unhexlify(a)).digest())
@@ -98,52 +103,81 @@ def hashtoaddr(a):
     addr = md160 + h[0:4]
     return b58encode(binascii.unhexlify(pubprefix)+addr)
 
+#Takes hexadecimal private key, spits out WIF
 def hashtowif(b):
-    presha = binascii.unhexlify(privprefix) + b + binascii.unhexlify(suff)
+    presha = binascii.unhexlify(privprefix) + b
+    if compressed: presha = presha + binascii.unhexlify("01")
     h = Hash(presha)
     key = presha + h[0:4]
     return b58encode(key)
 
-header = binascii.unhexlify("f70001d63081d30201010420")
-keyl = 32
-slist = open("foundkeys.txt","w")
-klist = []
-count = 0
-print "Starting search"
+#Takes hexadecimal private key, spits out address
+def address(c):
+    pubkey = str(g * c)
+    if pubkey[63] == " ":
+        pubkey = "0" + pubkey
+    if compressed:
+        if int(pubkey[-1], base=16) % 2 == 0:
+            pref = "02"
+        else:
+            pref = "03"
+        pubkey = pubkey[0:64]
+    else:
+        pref = "04"
+        if len(pubkey) < 129:
+            pubkey = pubkey[:64] + "0" + pubkey[64:]
+        pubkey = pubkey.replace(" ", "")
+    return hashtoaddr(pref + pubkey)
 
+#Loads wallet.dat into lists of addresses and private keys
 with open('wallet.dat', 'rb') as f:
+    print "Loading wallet.dat"
+    count = 0
+    privlist = []
+    publist = []
+    klist = []
+    header = binascii.unhexlify("f70001d63081d30201010420")
     data = f.read()
     header_index = data.find(header, 0)
-    if header_index >= 0:
-        body = data[header_index + len(header): header_index + len(header) + keyl]
-        privkey = int(binascii.hexlify(body), base = 16)
-        pubkey = str(g * privkey)
-        while body is not None:
-            print "\rScanned {:0.2f} %  ".format(float(header_index) / len(data) * 100),
-            if privkey not in klist:
-                if pubkey[63] == " ":
-                    pubkey = "0" + pubkey
-                if compressed:
-                    if int(pubkey[-1], base=16) % 2 == 0:
-                        pref = "02"
-                    else:
-                        pref = "03"
-                    pubkey = pubkey[0:64]
-                else:
-                    if len(pubkey) < 129:
-                        pubkey = pubkey[:64] + "0" + pubkey[64:]
-                    pubkey = pubkey.replace(" ", "")
-                count += 1
-                slist.write("Address: {}\nPrivate key: {}\n\n".format(hashtoaddr(pref + pubkey), hashtowif(body)))
-                klist.append(privkey)
-                
-            header_index = data.find(header,\
-                                    header_index + len(header) + keyl)
-            if header_index >= 0:
-                body = data[header_index + len(header): header_index + len(header) + keyl]
-                privkey = int(binascii.hexlify(body), base = 16)
-                pubkey = str(g * privkey)
-            else:
-                body = None
-print "\rScanned 100 %  "
-print "Found %i keys in wallet, check 'foundkeys.txt'" % (count)
+    body = data[header_index + len(header): header_index + len(header) + 32]
+    privkey = int(binascii.hexlify(body), base = 16)
+    while body is not None:
+        print "\rLoaded {:0.2f} %  ".format(float(header_index) / len(data) * 100),
+        if privkey not in klist:
+            count += 1
+            privlist.append(hashtowif(body))
+            publist.append(address(privkey))
+            klist.append(privkey)
+        header_index = data.find(header,header_index + len(header) + 32)
+        if header_index >= 0:
+            body = data[header_index + len(header): header_index + len(header) + 32]
+            privkey = int(binascii.hexlify(body), base = 16)
+        else:
+            body = None
+print "\rScanned 100 %  \nLoaded {} keys from wallet.dat\n".format(count)
+
+#Prompt user to paste address to search for
+print "Paste address with CTRL+V. Leave blank to get all!"
+keysearch = raw_input("Address: ")
+
+keyfile = open("foundkeys.txt","w")
+#Search for address and print private key or dump everything to file
+found = 0
+while keysearch:
+    for addr in publist:
+        if addr == keysearch:
+            foundkey = privlist[publist.index(addr)]
+            print "Private key: " + foundkey + "\nA copy is also in 'foundkeys.txt'"
+            keyfile.write("Address: {}\nPrivate key: {}\n\n".format(addr, foundkey))
+            found = True
+            break
+    if not found:
+        print "\nAddress was not found, try again or leave blank to get all."
+        keysearch = raw_input("Address: ")
+    else:
+        break
+else:
+    for addr in publist:
+        foundkey = privlist[publist.index(addr)]
+        keyfile.write("Address: {}\nPrivate key: {}\n\n".format(addr, foundkey))
+    print "\nAll addresses and private keys saved in 'foundkeys.txt'\n"
