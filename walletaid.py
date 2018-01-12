@@ -154,7 +154,7 @@ with open('wallet.dat', 'rb') as f:
             privkey = int(binascii.hexlify(body), base = 16)
         else:
             body = None
-print "\rScanned 100 %  \nLoaded {} keys from wallet.dat\n".format(count)
+print "\rLoaded 100 %  \nLoaded {} keys from wallet.dat\n".format(count)
 
 #Prompt user to paste address to search for
 print "Paste address with CTRL+V. Leave blank to get all!"
