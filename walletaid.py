@@ -2,7 +2,7 @@
 Walletaid created by Dwerg using Python 2.7
 
 Code for converting to addresses and WIF
-borrowed from pywallet.
+is borrowed from pywallet.
 """
 
 import hashlib
@@ -114,8 +114,11 @@ def hashtowif(b):
 #Takes hexadecimal private key, spits out address
 def address(c):
     pubkey = str(g * c)
-    if pubkey[63] == " ":
-        pubkey = "0" + pubkey
+    pubkey = ("0" * (64 - pubkey.index(" "))) + pubkey
+    #if pubkey[63] == " ":
+    #    pubkey = "0" + pubkey
+    #if pubkey[62] == " ":
+    #    pubkey = "00" + pubkey
     if compressed:
         if int(pubkey[-1], base=16) % 2 == 0:
             pref = "02"
@@ -131,44 +134,42 @@ def address(c):
 
 #Loads wallet.dat into lists of addresses and private keys
 with open('wallet.dat', 'rb') as f:
-    print "Loading wallet.dat"
     count = 0
-    privlist = []
-    publist = []
     klist = []
     header = binascii.unhexlify("f70001d63081d30201010420")
     data = f.read()
     header_index = data.find(header, 0)
-    body = data[header_index + len(header): header_index + len(header) + 32]
-    privkey = int(binascii.hexlify(body), base = 16)
-    while body is not None:
-        print "\rLoaded {:0.2f} %  ".format(float(header_index) / len(data) * 100),
-        if privkey not in klist:
+    key = data[header_index + len(header): header_index + len(header) + 32]
+    while True:
+        if key not in klist:
             count += 1
-            privlist.append(hashtowif(body))
-            publist.append(address(privkey))
-            klist.append(privkey)
+            print "\rLoading wallet.dat {:0.2f} %  ".format(float(header_index) / len(data) * 100),
+            klist.append(key)
+            
         header_index = data.find(header,header_index + len(header) + 32)
         if header_index >= 0:
-            body = data[header_index + len(header): header_index + len(header) + 32]
-            privkey = int(binascii.hexlify(body), base = 16)
+            key = data[header_index + len(header): header_index + len(header) + 32]
         else:
-            body = None
-print "\rLoaded 100 %  \nLoaded {} keys from wallet.dat\n".format(count)
+            break
+print "\rLoading wallet.dat 100 %  \nLoaded {} keys from wallet.dat\n".format(count)
 
 #Prompt user to paste address to search for
-print "Paste address with CTRL+V. Leave blank to get all!"
+print "Paste address to search with CTRL+V. Leave blank to get all!"
 keysearch = raw_input("Address: ")
 
-keyfile = open("foundkeys.txt","w")
 #Search for address and print private key or dump everything to file
+keyfile = open("foundkeys.txt","w")
 found = 0
+count = 0
 while keysearch:
-    for addr in publist:
+    for k in klist:
+        count += 1
+        addr = address(int(binascii.hexlify(k), base = 16))
+        print "\rChecking key {}/{}".format(count, len(klist)),
         if addr == keysearch:
-            foundkey = privlist[publist.index(addr)]
-            print "Private key: " + foundkey + "\nA copy is also in 'foundkeys.txt'"
-            keyfile.write("Address: {}\nPrivate key: {}\n\n".format(addr, foundkey))
+            privkey = hashtowif(k)
+            print "\rPrivate key: " + privkey + "\n\nA copy is also in 'foundkeys.txt'"
+            keyfile.write("Address: {}\nPrivate key: {}\n\n".format(addr, privkey))
             found = True
             break
     if not found:
@@ -177,7 +178,10 @@ while keysearch:
     else:
         break
 else:
-    for addr in publist:
-        foundkey = privlist[publist.index(addr)]
-        keyfile.write("Address: {}\nPrivate key: {}\n\n".format(addr, foundkey))
-    print "\nAll addresses and private keys saved in 'foundkeys.txt'\n"
+    for k in klist:
+        count += 1
+        print "\rCreating file {:0.2f} %  ".format(float(count) / len(klist) * 100),
+        addr = address(int(binascii.hexlify(k), base = 16))
+        privkey = hashtowif(k)
+        keyfile.write("Address: {}\nPrivate key: {}\n\n".format(addr, privkey))
+    print "\rCreating file 100 %   \n\nAll addresses and private keys saved in 'foundkeys.txt'\n"
