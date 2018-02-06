@@ -2,7 +2,7 @@
 python walletaid.py
 IF ERRORLEVEL 1 (
 	CLS
-	"C:\python27\python.ee" walletaid.py
+	"C:\python27\python.exe" walletaid.py
 )
 if ERRORLEVEL 1 (
 	CLS
