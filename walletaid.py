@@ -7,10 +7,19 @@ is borrowed from pywallet.
 
 import hashlib
 import binascii
+from os import path
 from ConfigParser import SafeConfigParser
 
-#Opens config.ini and gets settings
+#Opens config.ini and gets settings, checks if wallet.dat is in folder
 config = SafeConfigParser()
+
+if not path.exists("config.ini"):
+    print "The config.ini file was not found"
+    exit(0)
+if not path.exists("wallet.dat"):
+    print "The wallet.dat file is not in folder or has different name"
+    exit(0)
+
 config.read("config.ini")
 pubprefix = config.get("settings", "pubkeyprefix")
 privprefix = config.get("settings", "privkeyprefix")
@@ -115,10 +124,6 @@ def hashtowif(b):
 def address(c):
     pubkey = str(g * c)
     pubkey = ("0" * (64 - pubkey.index(" "))) + pubkey
-    #if pubkey[63] == " ":
-    #    pubkey = "0" + pubkey
-    #if pubkey[62] == " ":
-    #    pubkey = "00" + pubkey
     if compressed:
         if int(pubkey[-1], base=16) % 2 == 0:
             pref = "02"
