@@ -11,5 +11,5 @@ IF ERRORLEVEL 1 (
 IF ERRORLEVEL 1 (
 	CLS
 	ECHO Check Python install
+	PAUSE
 )
-@pause

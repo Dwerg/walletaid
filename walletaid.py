@@ -9,6 +9,7 @@ import hashlib
 import binascii
 from os import path
 from ConfigParser import SafeConfigParser
+from Tkinter import *
 
 #Opens config.ini and gets settings, checks if wallet.dat is in folder
 config = SafeConfigParser()
@@ -24,6 +25,27 @@ config.read("config.ini")
 pubprefix = config.get("settings", "pubkeyprefix")
 privprefix = config.get("settings", "privkeyprefix")
 compressed = config.getboolean("settings", "compressed")
+
+#Loads wallet.dat into lists of addresses and private keys
+with open('wallet.dat', 'rb') as f:
+    count = 0
+    klist = []
+    header = binascii.unhexlify("f70001d63081d30201010420")
+    data = f.read()
+    header_index = data.find(header, 0)
+    key = data[header_index + len(header): header_index + len(header) + 32]
+    while True:
+        if key not in klist:
+            count += 1
+            #print "\rLoading wallet.dat {:.0f} %  ".format(float(header_index) / len(data) * 100),
+            klist.append(key)
+            
+        header_index = data.find(header,header_index + len(header) + 32)
+        if header_index >= 0:
+            key = data[header_index + len(header): header_index + len(header) + 32]
+        else:
+            break
+print "\rLoading wallet.dat 100 %  \nLoaded {} keys from wallet.dat\n".format(count)
 
 #Calculates public key from a private key
 class Point(object):
@@ -137,56 +159,142 @@ def address(c):
         pubkey = pubkey.replace(" ", "")
     return hashtoaddr(pref + pubkey)
 
-#Loads wallet.dat into lists of addresses and private keys
-with open('wallet.dat', 'rb') as f:
+#GUI and code for printing output to textbox and file.
+print "Opening GUI"
+
+#Prints all keys.
+def getAll():
+    frame1.destroy()
+    frame3.grid()
+    keyfile = open("foundkeys.txt","w")
     count = 0
-    klist = []
-    header = binascii.unhexlify("f70001d63081d30201010420")
-    data = f.read()
-    header_index = data.find(header, 0)
-    key = data[header_index + len(header): header_index + len(header) + 32]
-    while True:
-        if key not in klist:
-            count += 1
-            print "\rLoading wallet.dat {:0.2f} %  ".format(float(header_index) / len(data) * 100),
-            klist.append(key)
-            
-        header_index = data.find(header,header_index + len(header) + 32)
-        if header_index >= 0:
-            key = data[header_index + len(header): header_index + len(header) + 32]
-        else:
-            break
-print "\rLoading wallet.dat 100 %  \nLoaded {} keys from wallet.dat\n".format(count)
-
-#Prompt user to paste address to search for
-print "Paste address to search with CTRL+V. Leave blank to get all!"
-keysearch = raw_input("Address: ")
-
-#Search for address and print private key or dump everything to file
-keyfile = open("foundkeys.txt","w")
-found = 0
-count = 0
-while keysearch:
+    maxcount = len(klist)
     for k in klist:
         count += 1
-        addr = address(int(binascii.hexlify(k), base = 16))
-        print "\rChecking key {}/{}".format(count, len(klist)),
-        if addr == keysearch:
-            privkey = hashtowif(k)
-            print "\rPrivate key: " + privkey + "\n\nA copy is also in 'foundkeys.txt'"
-            keyfile.write("Address: {}\nPrivate key: {}\n\n".format(addr, privkey))
-            found = True
-            break
-    if not found:
-        print "\nAddress was not found, try again or leave blank to get all."
-        keysearch = raw_input("Address: ")
-    else:
-        break
-else:
-    for k in klist:
-        count += 1
-        print "\rCreating file {:0.2f} %  ".format(float(count) / len(klist) * 100),
         addr = address(int(binascii.hexlify(k), base = 16))
         privkey = hashtowif(k)
         keyfile.write("Address: {}\nPrivate key: {}\n\n".format(addr, privkey))
-    print "\rCreating file 100 %   \n\nAll addresses and private keys saved in 'foundkeys.txt'\n"
+
+        keyCount.set("Hashing key {}/{}".format(count, maxcount))
+        
+        outBox.configure(state='normal')
+        outBox.insert('end', "Address: {}\nPrivate key: {}\n\n".format(addr, privkey))
+        outBox.configure(state='disabled')
+        outBox.yview_moveto(1.0)
+        outBox.update()
+        
+    outBox.configure(state='normal')
+    outBox.insert("end", "Finished search!\nSaved found keypairs to 'foundkeys.txt'")
+    outBox.configure(state='disabled')
+    outBox.yview_moveto(1.0)
+
+#Goes to search window.
+def searchWin():
+    frame1.destroy()
+    frame2.grid()
+
+#Finds keys for addresses inputted by user, prints if found.
+def submitSearch():
+    searchList = inField.get("1.0", END).split()
+    frame2.destroy()
+    frame3.grid()
+    keyfile = open("foundkeys.txt","w")
+    found = False
+    count = 0
+    maxcount = len(klist)
+    for k in klist:
+        count += 1
+        addr = address(int(binascii.hexlify(k), base = 16))
+        keyCount.set("Checking key {}/{}".format(count, maxcount))
+        for keysearch in searchList:
+            if addr == keysearch:
+                privkey = hashtowif(k)
+                keyfile.write("Address: {}\nPrivate key: {}\n\n".format(addr, privkey))
+                found = True
+                
+                outBox.configure(state='normal')
+                outBox.insert('end', "Address: {}\nPrivate key: {}\n\n".format(addr, privkey))
+                outBox.configure(state='disabled')
+                outBox.yview_moveto(1.0)
+        outBox.update()
+    if not found:
+        outBox.configure(state='normal')
+        outBox.insert("end", "Entered addresse(s) was not found!")
+        outBox.configure(state='disabled')
+    else:
+        outBox.configure(state='normal')
+        outBox.insert("end", "Finished search!\nSaved found keypairs to 'foundkeys.txt'")
+        outBox.configure(state='disabled')
+        outBox.yview_moveto(1.0)
+
+#Quits the program.
+def kill():
+    root.destroy()
+
+#Sets up the GUI frames.
+root = Tk()
+root.title("Walletaid")
+root.resizable(width=False, height=False)
+
+#Startup frame
+frame1 = Frame(root)
+frame1.grid()
+
+instruction=Label(frame1,
+    text="Choose an option!",
+    font=("", 11 , "bold")
+    )
+instruction.grid(row=0, column=1, columnspan=2)
+
+selButton1 = Button(frame1, text="Get all keys", command=getAll)
+selButton2 = Button(frame1, text="Search for specific keys", command=searchWin)
+selButton1.grid(row=1, column=1)
+selButton2.grid(row=1, column=2)
+
+spacing1 = Frame(frame1, height=10)
+spacing2 = Frame(frame1, width=10)
+spacing3 = Frame(frame1, width=10)
+spacing1.grid(row=2,columnspan=2)
+spacing2.grid(rowspan=3)
+spacing3.grid(column=3, rowspan=3)
+#End startup frame
+
+#Search frame
+frame2 = Frame(root)
+
+instruction=Label(frame2,
+    text="Enter a list of addresses to search for below",
+    font=("", 11 , "bold")
+    )
+instruction.grid(row=0)
+
+inField = Text(frame2, height=15, width=40)
+inField.grid(row=1)
+
+okButton = Button(frame2, text="OK", command=submitSearch)
+okButton.grid(row=2, padx=55, pady=5, sticky=E)
+
+cancelButton = Button(frame2, text="Close", command=kill)
+cancelButton.grid(row=2, padx=5, pady=5, sticky=E)
+#End search frame
+
+#Output frame
+frame3 = Frame(root)
+
+keyCount = StringVar()
+infoText = Label(frame3, textvariable=keyCount)
+infoText.grid()
+
+scrollbar = Scrollbar(frame3)
+outBox = Text(frame3, height=30, width=80, state="disabled", yscrollcommand=scrollbar.set)
+
+outBox.grid(row=1)
+scrollbar.grid(row=1, column=1, sticky=N+S)
+scrollbar.config(command=outBox.yview)
+
+closeButton = Button(frame3, text="Close", command=kill)
+closeButton.grid(row=2)
+#End output frame
+
+#Launches the GUI
+root.mainloop()
