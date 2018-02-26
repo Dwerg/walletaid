@@ -30,7 +30,7 @@ compressed = config.getboolean("settings", "compressed")
 with open('wallet.dat', 'rb') as f:
     count = 0
     klist = []
-    header = binascii.unhexlify("f70001d63081d30201010420")
+    header = binascii.unhexlify("0201010420")
     data = f.read()
     header_index = data.find(header, 0)
     key = data[header_index + len(header): header_index + len(header) + 32]
@@ -219,7 +219,7 @@ def submitSearch():
         outBox.update()
     if not found:
         outBox.configure(state='normal')
-        outBox.insert("end", "Entered addresse(s) was not found!")
+        outBox.insert("end", "Entered address(es) was not found!")
         outBox.configure(state='disabled')
     else:
         outBox.configure(state='normal')
@@ -266,34 +266,44 @@ instruction=Label(frame2,
     text="Enter a list of addresses to search for below",
     font=("", 11 , "bold")
     )
-instruction.grid(row=0)
+instruction.grid(row=0, column=1)
 
 inField = Text(frame2, height=15, width=40)
-inField.grid(row=1)
+inField.grid(row=1, column=1)
 
 okButton = Button(frame2, text="OK", command=submitSearch)
-okButton.grid(row=2, padx=55, pady=5, sticky=E)
+okButton.grid(row=2, column=1, padx=55, pady=5, sticky=E)
 
 cancelButton = Button(frame2, text="Close", command=kill)
-cancelButton.grid(row=2, padx=5, pady=5, sticky=E)
+cancelButton.grid(row=2, column=1, padx=5, pady=5, sticky=E)
+
+spacing4 = Frame(frame2, width=10)
+spacing5 = Frame(frame2, width=10)
+spacing4.grid(column=0, rowspan=2)
+spacing5.grid(column=2, rowspan=2)
 #End search frame
 
 #Output frame
 frame3 = Frame(root)
 
 keyCount = StringVar()
-infoText = Label(frame3, textvariable=keyCount)
-infoText.grid()
+infoText = Label(frame3, textvariable=keyCount, font=("", 11 , "bold"))
+infoText.grid(column=1)
 
 scrollbar = Scrollbar(frame3)
-outBox = Text(frame3, height=30, width=80, state="disabled", yscrollcommand=scrollbar.set)
+outBox = Text(frame3, height=20, width=70, state="disabled", yscrollcommand=scrollbar.set)
 
-outBox.grid(row=1)
-scrollbar.grid(row=1, column=1, sticky=N+S)
+outBox.grid(row=1, column=1)
+scrollbar.grid(row=1, column=2, sticky=N+S)
 scrollbar.config(command=outBox.yview)
 
-closeButton = Button(frame3, text="Close", command=kill)
-closeButton.grid(row=2)
+closeButton = Button(frame3, height=2, width=15, text="Close", font=("", 11 , "bold"), command=kill)
+closeButton.grid(row=2, column=1, pady=10)
+
+spacing6 = Frame(frame3, width=10)
+spacing7 = Frame(frame3, width=10)
+spacing6.grid(column=0, rowspan=2)
+spacing7.grid(column=3, rowspan=2)
 #End output frame
 
 #Launches the GUI
