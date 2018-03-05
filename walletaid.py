@@ -12,25 +12,26 @@ from ConfigParser import SafeConfigParser
 from Tkinter import *
 
 #Opens config.ini and gets settings, checks if wallet.dat is in folder
-config = SafeConfigParser()
-
+#config = SafeConfigParser()
+"""
 if not path.exists("config.ini"):
     print "The config.ini file was not found"
     exit(0)
+"""
 if not path.exists("wallet.dat"):
     print "The wallet.dat file is not in folder or has different name"
     exit(0)
 
-config.read("config.ini")
-pubprefix = config.get("settings", "pubkeyprefix")
-privprefix = config.get("settings", "privkeyprefix")
-compressed = config.getboolean("settings", "compressed")
+#config.read("config.ini")
+pubprefix = "169a"#config.get("settings", "pubkeyprefix")
+privprefix = "ab36"#config.get("settings", "privkeyprefix")
+compressed = False#config.getboolean("settings", "compressed")
 
 #Loads wallet.dat into lists of addresses and private keys
 with open('wallet.dat', 'rb') as f:
     count = 0
     klist = []
-    header = binascii.unhexlify("0201010420")
+    header = binascii.unhexlify("200001")
     data = f.read()
     header_index = data.find(header, 0)
     key = data[header_index + len(header): header_index + len(header) + 32]
@@ -171,14 +172,16 @@ def getAll():
     maxcount = len(klist)
     for k in klist:
         count += 1
-        addr = address(int(binascii.hexlify(k), base = 16))
+        #addr = address(int(binascii.hexlify(k), base = 16))
         privkey = hashtowif(k)
-        keyfile.write("Address: {}\nPrivate key: {}\n\n".format(addr, privkey))
+        #keyfile.write("Address: {}\nPrivate key: {}\n\n".format(addr, privkey))
+        keyfile.write("Private key: {}\n\n".format(privkey))
 
         keyCount.set("Hashing key {}/{}".format(count, maxcount))
         
         outBox.configure(state='normal')
-        outBox.insert('end', "Address: {}\nPrivate key: {}\n\n".format(addr, privkey))
+        #outBox.insert('end', "Address: {}\nPrivate key: {}\n\n".format(addr, privkey))
+        outBox.insert('end', "Private key: {}\n\n".format(privkey))
         outBox.configure(state='disabled')
         outBox.yview_moveto(1.0)
         outBox.update()
@@ -247,7 +250,7 @@ instruction=Label(frame1,
 instruction.grid(row=0, column=1, columnspan=2)
 
 selButton1 = Button(frame1, text="Get all keys", command=getAll)
-selButton2 = Button(frame1, text="Search for specific keys", command=searchWin)
+selButton2 = Button(frame1, text="Search for specific keys", state="disabled", command=searchWin)
 selButton1.grid(row=1, column=1)
 selButton2.grid(row=1, column=2)
 
