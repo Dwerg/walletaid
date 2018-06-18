@@ -10,6 +10,7 @@ import binascii
 from os import path
 from ConfigParser import SafeConfigParser
 from Tkinter import *
+import ttk
 
 #Opens config.ini and gets settings, checks if wallet.dat is in folder
 config = SafeConfigParser()
@@ -46,6 +47,7 @@ with open('wallet.dat', 'rb') as f:
         else:
             break
 print "\rLoading wallet.dat 100 %  \nLoaded {} keys from wallet.dat\n".format(count)
+maxcount = len(klist)
 
 #Calculates public key from a private key
 class Point(object):
@@ -168,20 +170,20 @@ def getAll():
     frame3.grid()
     keyfile = open("foundkeys.txt","w")
     count = 0
-    maxcount = len(klist)
     for k in klist:
         count += 1
         addr = address(int(binascii.hexlify(k), base = 16))
         privkey = hashtowif(k)
         keyfile.write("Address: {}\nPrivate key: {}\n\n".format(addr, privkey))
 
-        keyCount.set("Hashing key {}/{}".format(count, maxcount))
+        #keyCount.set("Hashing key {}/{}".format(count, maxcount))
         
         outBox.configure(state='normal')
         outBox.insert('end', "Address: {}\nPrivate key: {}\n\n".format(addr, privkey))
         outBox.configure(state='disabled')
         outBox.yview_moveto(1.0)
         outBox.update()
+        proBar["value"] = count
         
     outBox.configure(state='normal')
     outBox.insert("end", "Finished search!\nSaved found keypairs to 'foundkeys.txt'")
@@ -201,11 +203,10 @@ def submitSearch():
     keyfile = open("foundkeys.txt","w")
     found = False
     count = 0
-    maxcount = len(klist)
     for k in klist:
         count += 1
         addr = address(int(binascii.hexlify(k), base = 16))
-        keyCount.set("Checking key {}/{}".format(count, maxcount))
+        #keyCount.set("Checking key {}/{}".format(count, maxcount))
         for keysearch in searchList:
             if addr == keysearch:
                 privkey = hashtowif(k)
@@ -217,6 +218,7 @@ def submitSearch():
                 outBox.configure(state='disabled')
                 outBox.yview_moveto(1.0)
         outBox.update()
+        proBar["value"] = count
     if not found:
         outBox.configure(state='normal')
         outBox.insert("end", "Entered address(es) was not found!")
@@ -286,9 +288,11 @@ spacing5.grid(column=2, rowspan=2)
 #Output frame
 frame3 = Frame(root)
 
-keyCount = StringVar()
-infoText = Label(frame3, textvariable=keyCount, font=("", 11 , "bold"))
-infoText.grid(column=1)
+#keyCount = StringVar()
+#infoText = Label(frame3, textvariable=keyCount, font=("", 11 , "bold"))
+#infoText.grid(column=1)
+proBar = ttk.Progressbar(frame3, orient=HORIZONTAL, length=300, mode="determinate", maximum=maxcount)
+proBar.grid(column=1)
 
 scrollbar = Scrollbar(frame3)
 outBox = Text(frame3, height=20, width=70, state="disabled", yscrollcommand=scrollbar.set)
