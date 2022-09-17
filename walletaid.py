@@ -5,20 +5,20 @@ Code for converting to addresses and WIF
 is borrowed from pywallet.
 """
 
-import hashlib
-import binascii
-from os import path
+import sys, os.path, bsddb.db, struct, binascii, collections, hashlib
+#from os import path
 from ConfigParser import SafeConfigParser
 from Tkinter import *
 import ttk
+from aes import *
 
 #Opens config.ini and gets settings, checks if wallet.dat is in folder
 config = SafeConfigParser()
 
-if not path.exists("config.ini"):
+if not os.path.exists("config.ini"):
     print "The config.ini file was not found"
     exit(0)
-if not path.exists("wallet.dat"):
+if not os.path.exists("wallet.dat"):
     print "The wallet.dat file is not in folder or has different name"
     exit(0)
 
@@ -26,28 +26,91 @@ config.read("config.ini")
 pubprefix = config.get("settings", "pubkeyprefix")
 privprefix = config.get("settings", "privkeyprefix")
 compressed = config.getboolean("settings", "compressed")
+wallet_file = os.path.abspath("wallet.dat")
 
-#Loads wallet.dat into lists of addresses and private keys
-with open('wallet.dat', 'rb') as f:
-    count = 0
-    klist = []
-    header = binascii.unhexlify("0201010420")
-    data = f.read()
-    header_index = data.find(header, 0)
-    key = data[header_index + len(header): header_index + len(header) + 32]
-    while True:
-        if key not in klist:
-            count += 1
-            #print "\rLoading wallet.dat {:.0f} %  ".format(float(header_index) / len(data) * 100),
-            klist.append(key)
-            
-        header_index = data.find(header,header_index + len(header) + 32)
-        if header_index >= 0:
-            key = data[header_index + len(header): header_index + len(header) + 32]
-        else:
-            break
-print "\rLoading wallet.dat 100 %  \nLoaded {} keys from wallet.dat\n".format(count)
-maxcount = len(klist)
+#Loads unencrypted wallet.dat into a list of private keys
+def get_uckeys(wallet_filename):
+    with open('wallet.dat', 'rb') as f:
+        klist = []
+        header = binascii.unhexlify("0201010420")
+        data = f.read()
+        header_index = data.find(header, 0)
+        key = data[header_index + len(header): header_index + len(header) + 32]
+        while True:
+            if key not in klist:
+                klist.append(key)
+                
+            header_index = data.find(header,header_index + len(header) + 32)
+            if header_index >= 0:
+                key = data[header_index + len(header): header_index + len(header) + 32]
+            else:
+                break
+    return klist
+
+
+#Pulls encrypted master key from wallet.dat
+def get_mkey(wallet_filename):
+
+	with open(wallet_filename, "rb") as wallet_file:
+		wallet_file.seek(12)
+		if wallet_file.read(8) != b"\x62\x31\x05\x00\x09\x00\x00\x00":  # BDB magic, Btree v9
+			print(prog+": ERROR: file is not a Bitcoin Core wallet")
+			sys.exit(1)
+
+
+		db_env = bsddb.db.DBEnv()
+		db_env.open(os.path.dirname(wallet_filename), bsddb.db.DB_CREATE | bsddb.db.DB_INIT_MPOOL)
+		db = bsddb.db.DB(db_env)
+
+		db.open(wallet_filename, b"main", bsddb.db.DB_BTREE, bsddb.db.DB_RDONLY)
+		mkey = db.get(b"\x04mkey\x01\x00\x00\x00")
+	return mkey
+
+#Pulls all encrypted private keys from wallet.dat
+def read_wallet(wallet_filename):
+
+	with open(wallet_filename, "rb") as wallet_file:
+		wallet_file.seek(12)
+		if wallet_file.read(8) != b"\x62\x31\x05\x00\x09\x00\x00\x00":  # BDB magic, Btree v9
+			print(prog+": ERROR: file is not a Bitcoin Core wallet")
+			sys.exit(1)
+
+
+		db_env = bsddb.db.DBEnv()
+		db_env.open(os.path.dirname(wallet_filename), bsddb.db.DB_PRIVATE | bsddb.db.DB_THREAD | bsddb.db.DB_INIT_LOCK | bsddb.db.DB_INIT_MPOOL | bsddb.db.DB_CREATE)
+		db = bsddb.db.DB(db_env)
+
+		db.open(wallet_filename, "main", bsddb.db.DB_BTREE, bsddb.db.DB_THREAD | bsddb.db.DB_RDONLY)
+	return collections.OrderedDict((k, db[k]) for k in db.keys())
+
+#Used to decrypt masterkey and encrypted private keys
+class Crypter(object):
+    def __init__(self):
+        self.m = AESModeOfOperation()
+        self.cbc = self.m.modeOfOperation["CBC"]
+        self.sz = self.m.aes.keySize["SIZE_256"]
+
+    def SetKeyFromPassphrase(self, vKeyData, vSalt, nDerivIterations, nDerivationMethod):
+        data = vKeyData + vSalt
+        for i in range(nDerivIterations):
+            data = hashlib.sha512(data).digest()
+        self.SetKey(data[0:32])
+        self.SetIV(data[32:32+16])
+        return len(data)
+
+    def SetKey(self, key):
+        self.chKey = [ord(i) for i in key]
+
+    def SetIV(self, iv):
+        self.chIV = [ord(i) for i in iv]
+
+    def Encrypt(self, data):
+        mode, size, cypher = self.m.encrypt(data, self.cbc, self.chKey, self.sz, self.chIV)
+        return ''.join(map(chr, cypher))
+ 
+    def Decrypt(self, data):
+        chData = [ord(i) for i in data]
+        return self.m.decrypt(chData, self.sz, self.cbc, self.chKey, self.sz, self.chIV)
 
 #Calculates public key from a private key
 class Point(object):
@@ -164,26 +227,83 @@ def address(c):
 #GUI and code for printing output to textbox and file.
 print "Opening GUI"
 
+#Encrypted yes or no?
+def is_enc():
+    is_enc_frame.destroy()
+    pwbox_frame.grid()
+    pwField.focus()
+
+def not_enc():
+    is_enc_frame.destroy()
+    frame1.grid()
+
+def pw_entered():
+    pwbox_frame.destroy()
+    frame1.grid()
+    
+
 #Prints all keys.
 def getAll():
+    wallet_pass_phrase = entered_pass.get()
     frame1.destroy()
     frame3.grid()
     keyfile = open("foundkeys.txt","w")
     count = 0
-    for k in klist:
-        count += 1
-        addr = address(int(binascii.hexlify(k), base = 16))
-        privkey = hashtowif(k)
-        keyfile.write("Address: {}\nPrivate key: {}\n\n".format(addr, privkey))
-
-        #keyCount.set("Hashing key {}/{}".format(count, maxcount))
+    if wallet_pass_phrase:
+        data = read_wallet(wallet_file)
+        encrypted_master_key = get_mkey(wallet_file)
+        try:
+            os.remove("__db.001")
+            os.remove("__db.002")
+            os.remove("__db.003")
+        except:
+            pass
+        proBar["maximum"] = len(data)
         
-        outBox.configure(state='normal')
-        outBox.insert('end', "Address: {}\nPrivate key: {}\n\n".format(addr, privkey))
-        outBox.configure(state='disabled')
-        outBox.yview_moveto(1.0)
-        outBox.update()
-        proBar["value"] = count
+        crypter = Crypter()
+        encrypted_mkey, salt, method, iterations = struct.unpack_from("< 49p 9p I I", encrypted_master_key)
+        crypter.SetKeyFromPassphrase(wallet_pass_phrase, salt, iterations, method)
+        masterkey = crypter.Decrypt(encrypted_mkey)
+        crypter.SetKey(masterkey)
+        
+        for key, value in data.items():
+            count += 1
+            pub_key = binascii.hexlify(key)[12:78]
+            enc_priv_key = binascii.hexlify(value)[2:98]
+            if binascii.hexlify(key)[0:10] == "04636b6579":
+                crypter.SetIV(Hash((binascii.unhexlify(pub_key))))
+                dec_key = crypter.Decrypt(binascii.unhexlify(enc_priv_key))
+
+                addr = address(int(binascii.hexlify(dec_key), base = 16))
+                privkey = hashtowif(dec_key)
+                keyfile.write("Address: {}\nPrivate key: {}\n\n".format(addr, privkey))
+                
+                outBox.configure(state='normal')
+                outBox.insert('end', "Address: {}\nPrivate key: {}\n\n".format(addr, privkey))
+                outBox.configure(state='disabled')
+                outBox.yview_moveto(1.0)
+            outBox.update()
+            proBar["value"] = count
+
+
+
+        
+    else:
+        klist = get_uckeys(wallet_file)
+        proBar["maximum"] = len(klist)
+        
+        for k in klist:
+            count += 1
+            addr = address(int(binascii.hexlify(k), base = 16))
+            privkey = hashtowif(k)
+            keyfile.write("Address: {}\nPrivate key: {}\n\n".format(addr, privkey))
+            
+            outBox.configure(state='normal')
+            outBox.insert('end', "Address: {}\nPrivate key: {}\n\n".format(addr, privkey))
+            outBox.configure(state='disabled')
+            outBox.yview_moveto(1.0)
+            outBox.update()
+            proBar["value"] = count
         
     outBox.configure(state='normal')
     outBox.insert("end", "Finished search!\nSaved found keypairs to 'foundkeys.txt'")
@@ -198,27 +318,66 @@ def searchWin():
 #Finds keys for addresses inputted by user, prints if found.
 def submitSearch():
     searchList = inField.get("1.0", END).split()
+    wallet_pass_phrase = entered_pass.get()
     frame2.destroy()
     frame3.grid()
     keyfile = open("foundkeys.txt","w")
     found = False
     count = 0
-    for k in klist:
-        count += 1
-        addr = address(int(binascii.hexlify(k), base = 16))
-        #keyCount.set("Checking key {}/{}".format(count, maxcount))
-        for keysearch in searchList:
-            if addr == keysearch:
-                privkey = hashtowif(k)
-                keyfile.write("Address: {}\nPrivate key: {}\n\n".format(addr, privkey))
-                found = True
-                
-                outBox.configure(state='normal')
-                outBox.insert('end', "Address: {}\nPrivate key: {}\n\n".format(addr, privkey))
-                outBox.configure(state='disabled')
-                outBox.yview_moveto(1.0)
-        outBox.update()
-        proBar["value"] = count
+    if wallet_pass_phrase:
+        data = read_wallet(wallet_file)
+        encrypted_master_key = get_mkey(wallet_file)
+        proBar["maximum"] = len(data)
+        
+        crypter = Crypter()
+        encrypted_mkey, salt, method, iterations = struct.unpack_from("< 49p 9p I I", encrypted_master_key)
+        crypter.SetKeyFromPassphrase(wallet_pass_phrase, salt, iterations, method)
+        masterkey = crypter.Decrypt(encrypted_mkey)
+        crypter.SetKey(masterkey)
+
+        for key, value in data.items():
+            count += 1
+            pub_key = binascii.hexlify(key)[12:78]
+            enc_priv_key = binascii.hexlify(value)[2:98]
+            if binascii.hexlify(key)[0:10] == "04636b6579":
+                crypter.SetIV(Hash((binascii.unhexlify(pub_key))))
+                dec_key = crypter.Decrypt(binascii.unhexlify(enc_priv_key))
+
+                addr = address(int(binascii.hexlify(dec_key), base = 16))
+                for keysearch in searchList:
+                    if addr == keysearch:
+                        privkey = hashtowif(dec_key)
+                        keyfile.write("Address: {}\nPrivate key: {}\n\n".format(addr, privkey))
+                        found = True
+                        
+                        outBox.configure(state='normal')
+                        outBox.insert('end', "Address: {}\nPrivate key: {}\n\n".format(addr, privkey))
+                        outBox.configure(state='disabled')
+                        outBox.yview_moveto(1.0)
+            outBox.update()
+            proBar["value"] = count
+
+
+    else:
+        klist = get_uckeys(wallet_file)
+        proBar["maximum"] = len(klist)
+        
+        for k in klist:
+            count += 1
+            addr = address(int(binascii.hexlify(k), base = 16))
+            for keysearch in searchList:
+                if addr == keysearch:
+                    privkey = hashtowif(k)
+                    keyfile.write("Address: {}\nPrivate key: {}\n\n".format(addr, privkey))
+                    found = True
+                    
+                    outBox.configure(state='normal')
+                    outBox.insert('end', "Address: {}\nPrivate key: {}\n\n".format(addr, privkey))
+                    outBox.configure(state='disabled')
+                    outBox.yview_moveto(1.0)
+            outBox.update()
+            proBar["value"] = count
+
     if not found:
         outBox.configure(state='normal')
         outBox.insert("end", "Entered address(es) was not found!")
@@ -231,6 +390,12 @@ def submitSearch():
 
 #Quits the program.
 def kill():
+    try:
+        os.remove("__db.001")
+        os.remove("__db.002")
+        os.remove("__db.003")
+    except:
+        pass
     root.destroy()
 
 #Sets up the GUI frames.
@@ -240,7 +405,6 @@ root.resizable(width=False, height=False)
 
 #Startup frame
 frame1 = Frame(root)
-frame1.grid()
 
 instruction=Label(frame1,
     text="Choose an option!",
@@ -288,10 +452,7 @@ spacing5.grid(column=2, rowspan=2)
 #Output frame
 frame3 = Frame(root)
 
-#keyCount = StringVar()
-#infoText = Label(frame3, textvariable=keyCount, font=("", 11 , "bold"))
-#infoText.grid(column=1)
-proBar = ttk.Progressbar(frame3, orient=HORIZONTAL, length=300, mode="determinate", maximum=maxcount)
+proBar = ttk.Progressbar(frame3, orient=HORIZONTAL, length=300, mode="determinate",)
 proBar.grid(column=1)
 
 scrollbar = Scrollbar(frame3)
@@ -309,6 +470,46 @@ spacing7 = Frame(frame3, width=10)
 spacing6.grid(column=0, rowspan=2)
 spacing7.grid(column=3, rowspan=2)
 #End output frame
+
+#Is wallet.dat encrypted? frame
+is_enc_frame = Frame(root)
+is_enc_frame.grid()
+
+instruction=Label(is_enc_frame,
+    text="Does wallet have a password?",
+    font=("", 11 , "bold")
+    )
+instruction.grid(row=0, column=1, columnspan=2)
+
+yesButton = Button(is_enc_frame, text="Yes", command=is_enc)
+noButton = Button(is_enc_frame, text="No", command=not_enc)
+yesButton.grid(row=1, column=1)
+noButton.grid(row=1, column=2)
+
+spacing8 = Frame(is_enc_frame, height=10)
+spacing9 = Frame(is_enc_frame, width=10)
+spacing10 = Frame(is_enc_frame, width=10)
+spacing8.grid(row=2,columnspan=2)
+spacing9.grid(rowspan=3)
+spacing10.grid(column=3, rowspan=3)
+#End is encrypted frame
+
+#Password entry frame
+pwbox_frame = Frame(root)
+
+instruction=Label(pwbox_frame,
+    text="Enter password",
+    font=("", 11 , "bold")
+    )
+instruction.grid(row=0, column=1, columnspan=2)
+
+entered_pass = StringVar()
+pwField = Entry(pwbox_frame, textvariable=entered_pass, show="*", width=40)
+pwField.grid(row=1, column=1)
+
+pwButton = Button(pwbox_frame, text="OK", command=pw_entered)
+pwButton.grid(row=2, column=1)
+#End password entry frame
 
 #Launches the GUI
 root.mainloop()
