@@ -1,54 +1,5 @@
 import sys, os.path, bsddb.db, struct, hashlib
 from aes import *
-from binascii import hexlify, unhexlify
-
-
-class Point(object):
-    def __init__(self, _x, _y, _order = None): self.x, self.y, self.order = _x, _y, _order
-
-    def calc(self, top, bottom, other_x):
-        l = (top * inverse_mod(bottom)) % p
-        x3 = (l * l - self.x - other_x) % p
-        return Point(x3, (l * (self.x - x3) - self.y) % p)
-
-    def double(self):
-        if self == INFINITY: return INFINITY
-        return self.calc(3 * self.x * self.x, 2 * self.y, self.x)
-
-    def __add__(self, other):
-        if other == INFINITY: return self
-        if self == INFINITY: return other
-        if self.x == other.x:
-            if (self.y + other.y) % p == 0: return INFINITY
-            return self.double()
-        return self.calc(other.y - self.y, other.x - self.x, other.x)
-
-    def __mul__(self, e):
-        if self.order: e %= self.order
-        if e == 0 or self == INFINITY: return INFINITY
-        result, q = INFINITY, self
-        while e:
-            if e&1: result += q
-            e, q = e >> 1, q.double()
-        return result
-
-    def __str__(self):
-        if self == INFINITY: return "infinity"
-        return "%x %x" % (self.x, self.y)
-
-def inverse_mod(a):
-    if a < 0 or a >= p: a = a % p
-    c, d, uc, vc, ud, vd = a, p, 1, 0, 0, 1
-    while c:
-        q, c, d = divmod(d, c) + (c,)
-        uc, vc, ud, vd = ud - q*uc, vd - q*vc, uc, vc
-    if ud > 0: return ud
-    return ud + p
-
-p, INFINITY = 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEFFFFFC2FL, Point(None, None) # secp256k1
-g = Point(0x79BE667EF9DCBBAC55A06295CE870B07029BFCDB2DCE28D959F2815B16F81798L, 0x483ada7726a3c4655da4fbfc0e1108a8fd17b448a68554199c47d08ffb10d4b8L,
-          0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141L)
-
 
 class Crypter(object):
     def __init__(self):
@@ -79,9 +30,6 @@ class Crypter(object):
         return self.m.decrypt(chData, self.sz, self.cbc, self.chKey, self.sz, self.chIV)
 
 wallet_filename = os.path.abspath("wallet.dat")
-
-def Hash(data):
-    return hashlib.sha256(hashlib.sha256(data).digest()).digest()
 
 with open(wallet_filename, "rb") as wallet_file:
         wallet_file.seek(12)
@@ -136,32 +84,32 @@ if words:
             try:
                 seedwords = "Mnemonic words:\n" + decrypt_words(words) + "\n\nRecovery passphrase:\n" + decrypt_words(recov_pass)
                 print(seedwords)
-                wordsfile = open("SEED.txt","w")
+                wordsfile = open("SEEDWORDS.txt","w")
                 wordsfile.write(seedwords)
-                print("\nWords saved to SEED.txt")
+                print("\nWords saved to SEEDWORDS.txt")
             except:
                 print("Wrong password")
         else:
             seedwords = "Mnemonic words:\n" + words + "\n\nRecovery passphrase:\n" + recov_pass
             print(seedwords)
-            wordsfile = open("SEED.txt","w")
+            wordsfile = open("SEEDWORDS.txt","w")
             wordsfile.write(seedwords)
-            print("\nWords saved to SEED.txt")
+            print("\nWords saved to SEEDWORDS.txt")
     else:
         if is_enc:
             try:
                 seedwords = "Mnemonic words:\n" + decrypt_words(words)
                 print(seedwords)
-                wordsfile = open("SEED.txt","w")
+                wordsfile = open("SEEDWORDS.txt","w")
                 wordsfile.write(seedwords)
-                print("\nWords saved to SEED.txt")
+                print("\nWords saved to SEEDWORDS.txt")
             except:
                 print("Wrong password")
         else:
             seedwords = "Mnemonic words:\n" + words
             print(seedwords)
-            wordsfile = open("SEED.txt","w")
+            wordsfile = open("SEEDWORDS.txt","w")
             wordsfile.write(seedwords)
-            print("\nWords saved to SEED.txt")
+            print("\nWords saved to SEEDWORDS.txt")
 else:
     print("No BIP39 words found")
