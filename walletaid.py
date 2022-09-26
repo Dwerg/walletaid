@@ -220,7 +220,7 @@ def address(c):
 #GUI and code for printing output to textbox and file.
 print "Opening GUI"
 
-def pw_entered():
+def pw_entered(event=None):
     pwbox_frame.destroy()
     frame1.grid()
 
@@ -535,6 +535,8 @@ pwButton.grid(row=2, column=1)
 #Launches the GUI
 if(mkey):
     pwbox_frame.grid()
+    pwField.focus()
+    pwField.bind("<Return>", pw_entered)
 else:
     frame1.grid()
 root.mainloop()
