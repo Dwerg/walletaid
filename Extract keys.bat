@@ -2,11 +2,11 @@
 "C:\python27\python.exe" walletaid.py
 IF ERRORLEVEL 1 (
 	CLS
-	walletaid.py
+	python walletaid.py
 )
 IF ERRORLEVEL 1 (
 	CLS
-	python walletaid.py
+	walletaid.py
 )
 IF ERRORLEVEL 1 (
 	CLS
