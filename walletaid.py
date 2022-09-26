@@ -246,7 +246,7 @@ def getSeed():
             result = strip_PKCS7_padding(dec_data)
         except:
             result = dec_data
-        return dec_data
+        return result
 
     seedwords = "No BIP39 words found"
 
@@ -257,23 +257,22 @@ def getSeed():
         masterkey = crypter.Decrypt(encrypted_mkey)
         crypter.SetKey(masterkey)
         crypter.SetIV(wordhash)
-        if recov_pass:
-            try:
-                seedwords = "Mnemonic words:\n" + decrypt_words(words) + "\n\nRecovery passphrase:\n" + decrypt_words(recov_pass)
-            except:
-                print("Wrong password")
+        uc_words = decrypt_words(words)
+
+        if wordhash == Hash(uc_words):
+            if recov_pass:
+                seedwords = "Mnemonic words:\n" + uc_words + "\n\nRecovery passphrase:\n" + decrypt_words(recov_pass)
+            else:
+                seedwords = "Mnemonic words:\n" + uc_words
         else:
-            try:
-                seedwords = "Mnemonic words:\n" + decrypt_words(words)
-            except:
-                print("Wrong password")
+            seedwords = "Wrong password!"
     elif words:
         if recov_pass:
             seedwords = "Mnemonic words:\n" + words + "\n\nRecovery passphrase:\n" + recov_pass
         else:
             seedwords = "Mnemonic words:\n" + words
 
-    if seedwords != "No BIP39 words found":
+    if seedwords[0:8] == "Mnemonic":
         keyfile = open("DUMP.txt", "w")
         keyfile.write(seedwords)
         outBox.configure(state='normal')
