@@ -5,6 +5,7 @@
 4. Make a copy of wallet.dat and place in walletaid folder.
 5. Open config.ini and change parameters appropriate to the coin.
 6. Run "Extract keys.bat"
-7. Choose whether to dump all keys or search for specific key(s).
-8. If search is chosen, paste each indivudual address to seach for on a new line and click "OK".
-9. Open "foundkeys.txt" to see the recovered keys and addresses.
+7. Enter password if prompted and click "OK".
+8. Choose whether to dump all keys, search for specific key(s) or get seed words.
+9. If search is chosen, paste each indivudual address to seach for on a new line and click "OK".
+10. Open "DUMP.txt" to see the recovered keys or seed words.
