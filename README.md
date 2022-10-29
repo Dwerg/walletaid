@@ -1,5 +1,5 @@
 # Walletaid
-This script is designed to extract private keys from wallet files created by Bitcoin Core **or** most full node wallets based on the same code.
+This script is designed to extract private keys from wallet files created by Bitcoin Core **or** most full node wallets based on the same codebase.
 ### Installation
 1. Install Python 3 (if not installed)
 2. Download ZIP of this repository and unzip.
